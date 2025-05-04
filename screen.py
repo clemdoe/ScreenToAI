@@ -1,94 +1,88 @@
-import tkinter as tk
+import sys
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton
+from PySide6.QtCore import Qt, QRect, QPoint
+from PySide6.QtGui import QPainter, QPen, QColor, QScreen
 from PIL import ImageGrab
 
-# Configuration de la fenêtre de sélection
-class ScreenshotTool:
+class ScreenshotWindow(QMainWindow):
     def __init__(self):
-        self.root = tk.Tk()
-        self.root.attributes('-fullscreen', True)
-        self.root.attributes('-alpha', 0.3)
-        self.root.attributes('-topmost', True)
-        
-        self.canvas = tk.Canvas(self.root, cursor='cross', bg='gray15')
-        self.canvas.pack(fill=tk.BOTH, expand=True)
+        super().__init__()
+        self.init_ui()
+        self.start_point = QPoint()
+        self.end_point = QPoint()
+        self.dragging = False
 
-        # Ajout du bouton close
-        self.add_close_button() 
-        
-        self.start_x = None
-        self.start_y = None
-        self.rect = None
+    def init_ui(self):
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setStyleSheet("background-color: rgba(0, 0, 0, 60);")
+        self.showFullScreen()
 
-        # Liaison des événements souris
-        self.canvas.bind('<ButtonPress-1>', self.on_press)
-        self.canvas.bind('<B1-Motion>', self.on_drag)
-        self.canvas.bind('<ButtonRelease-1>', self.on_release)
-    
-    def cancel_capture(self, event):
-        self.root.destroy()
-        print("Capture annulée")
+        # Bouton de fermeture
+        self.close_btn = QPushButton("×", self)
+        self.close_btn.setFixedSize(40, 40)
+        self.close_btn.move(self.screen().geometry().width()//2 - 20, 20)
+        self.close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #555555;
+                border: 2px solid #777777;
+                border-radius: 20px;
+                color: white;
+                font-size: 24px;
+            }
+            QPushButton:hover { background-color: #666666; }
+        """)
+        self.close_btn.clicked.connect(self.close)
 
-    def add_close_button(self):
-        # Création du bouton rond
-        screen_width = self.root.winfo_screenwidth()
-        size = 40
-        x = screen_width//2 - size//2
-        y = 20
+    def paintEvent(self, event):
+        if self.dragging:
+            painter = QPainter(self)
+            painter.setPen(QPen(Qt.gray, 2))
+            painter.setBrush(QColor(128, 128, 128, 50))
+            painter.drawRect(QRect(self.start_point, self.end_point))
+
+    def get_scaled_rect(self):
+        # Ajustement pour le scaling DPI
+        screen = self.screen()
+        scale_factor = screen.devicePixelRatio()
         
-        # Cercle de fond
-        self.canvas.create_oval(
-            x, y, x, y,
-            fill='#555555', outline='#777777', width=2,
-            tags='close_btn',
+        rect = QRect(self.start_point, self.end_point).normalized()
+        return QRect(
+            int(rect.x() * scale_factor),
+            int(rect.y() * scale_factor),
+            int(rect.width() * scale_factor),
+            int(rect.height() * scale_factor)
         )
-        
-        # Croix blanche
-        pad = 12
-        self.canvas.create_line(
-            x+pad, y+pad, x+size-pad, y+size-pad,
-            fill='white', width=2, tags='close_btn'
-        )
-        self.canvas.create_line(
-            x+size-pad, y+pad, x+pad, y+size-pad,
-            fill='white', width=2, tags='close_btn'
-        )
-        
-        # Interaction
-        self.canvas.tag_bind('close_btn', '<Button-1>', self.cancel_capture)
 
-    def on_press(self, event):
-        # Point de départ
-        self.start_x = event.x
-        self.start_y = event.y
-        self.rect = self.canvas.create_rectangle(
-            self.start_x, self.start_y, 
-            self.start_x, self.start_y, 
-            outline= 'grey',
-            fill= 'grey',
-            width=4)
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.start_point = event.position().toPoint()
+            self.end_point = self.start_point
+            self.dragging = True
 
-    def on_drag(self, event):
-        # Redimensionnement du rectangle pendant le drag
-        if self.rect:
-            self.canvas.coords(
-                self.rect, 
-                self.start_x, self.start_y, 
-                event.x, event.y)
+    def mouseMoveEvent(self, event):
+        if self.dragging:
+            self.end_point = event.position().toPoint()
+            self.update()
 
-    def on_release(self, event):
-        # Capture de la zone sélectionnée
-        x1 = min(self.start_x, event.x)
-        y1 = min(self.start_y, event.y)
-        x2 = max(self.start_x, event.x)
-        y2 = max(self.start_y, event.y)
-        
-        self.root.destroy()
-        self.screenshot = ImageGrab.grab(bbox=(x1, y1, x2, y2))
-        #self.screenshot.save('capture.png')
-        print("Capture sauvegardée sous capture.png")
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragging = False
+            scaled_rect = self.get_scaled_rect()
+            
+            # Capture avec Pillow
+            screenshot = ImageGrab.grab(bbox=(
+                scaled_rect.x(),
+                scaled_rect.y(),
+                scaled_rect.x() + scaled_rect.width(),
+                scaled_rect.y() + scaled_rect.height()
+            ))
+            
+            screenshot.save("C:/capture_test.png")  # Chemin absolu pour test
+            self.close()
 
-# Lancement de l'application
-if __name__ == '__main__':
-    app = ScreenshotTool()
-    app.root.mainloop()
-    #app.screenshot.show()
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = ScreenshotWindow()
+    window.show()
+    app.exec()
