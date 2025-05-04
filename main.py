@@ -12,7 +12,7 @@ import tkinter as tk
 class ScreenshotAnalyzer:
     def __init__(self):
         # Configurer Gemini
-        GOOGLE_API_KEY = "AIzaSyDqGvFHQXwDFh82rYuSuookusjmv3Gs9Rc"
+        GOOGLE_API_KEY = ""
         genai.configure(api_key=GOOGLE_API_KEY)
         self.model = genai.GenerativeModel('gemini-2.5-flash-preview-04-17')
         
